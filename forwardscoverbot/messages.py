@@ -15,222 +15,23 @@
 # along with ForwardsCoverBot.  If not, see <http://www.gnu.org/licenses/>
 
 
-import time
+from forwardscoverbot import constants
 
-from telegram.constants import ParseMode
-from telegram.ext import ApplicationHandlerStop, Application
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from forwardscoverbot import dbwrapper
-from forwardscoverbot import keyboards
+
+def github_link_kb():
+    button0 = InlineKeyboardButton(
+            text="Source code", 
+            url="https://github.com/91DarioDev/ForwardsCoverBot")
+    buttons_list = [[button0]]
+    keyboard = InlineKeyboardMarkup(buttons_list)
+    return keyboard
 
 
-async def before_processing(update, context):
-    if update.effective_chat.type != "private":
-        text = "This bot can be used only in private chats! I leave! Bye!"
-        keyboard = keyboards.private_chat_kb()
-        await update.effective_message.reply_text(text=text, reply_markup=keyboard)
-        await context.bot.leave_chat(chat_id=update.effective_message.chat_id)
-        raise ApplicationHandlerStop
-        
-    else:
-        int_time = int(time.mktime(update.effective_message.date.timetuple()))
-        context.application.create_task(
-            dbwrapper.add_user_db(update.effective_message.from_user.id, int_time),
-            update=update
-        )
-
-
-def get_message_reply_markup_inline_keyboard(message):
-    if not message.reply_markup:
-        return None
-    if not message.reply_markup.inline_keyboard:
-        return None
-    return message.reply_markup.inline_keyboard
-
-
-def leave_only_url_buttons_in_reply_markup(inline_keyboard):
-    removed_buttons = []
-    for row in inline_keyboard:
-        for button in row:
-            if not hasattr(button, 'url'):
-                row.remove(button)
-                removed_buttons.append(button)
-    return inline_keyboard, removed_buttons
-
-
-
-async def process_message(
-        update, context, message=None, remove_caption=False, custom_caption=None, 
-        remove_buttons=False, custom_reply_markup=None, disable_web_page_preview=False,
-        spoiler_action=None):
-
-    if not message:
-        message = update.effective_message
-
-    # custom caption
-    if custom_caption:
-        caption = custom_caption
-    else:
-        caption = message.caption_html if (message.caption and remove_caption is False) else None
-
-
-
-    keyboard_not_cleaned = get_message_reply_markup_inline_keyboard(message) if not remove_buttons else None
-    if custom_reply_markup:
-        reply_markup = custom_reply_markup
-    elif keyboard_not_cleaned:
-        inline_keyboard, removed_buttons_from_keyboard = leave_only_url_buttons_in_reply_markup(keyboard_not_cleaned)
-        reply_markup = InlineKeyboardMarkup(inline_keyboard)
-        if len(removed_buttons_from_keyboard) > 0:
-            await message.reply_text(
-                '{} buttons have been removed. I support only link buttons'.format(
-                    len(removed_buttons_from_keyboard)
-                )
-            )
-    else:
-        reply_markup = None
-
-
-    new_spoiler = message.has_media_spoiler
-    if spoiler_action:
-        if spoiler_action == 'add':
-            new_spoiler = True
-        if spoiler_action == 'remove':
-            new_spoiler = False
-
-
-    if message.text:
-        await message.reply_text(
-            text=message.text_html, 
-            parse_mode=ParseMode.HTML, 
-            reply_markup=reply_markup,
-            link_preview_options=message.link_preview_options if not disable_web_page_preview else {'is_disabled': True}
-        )
-
-    elif message.voice:
-        media = message.voice.file_id
-        duration = message.voice.duration
-        await message.reply_voice(
-            voice=media, 
-            duration=duration, 
-            caption=caption, 
-            parse_mode=ParseMode.HTML, 
-            reply_markup=reply_markup
-        )
-
-    elif message.photo:
-        media = message.photo[-1].file_id
-        await message.reply_photo(
-            photo=media, 
-            caption=caption, 
-            parse_mode=ParseMode.HTML, 
-            reply_markup=reply_markup,
-            has_spoiler=new_spoiler,
-            show_caption_above_media=message.show_caption_above_media
-        )
-
-    elif message.animation:
-        media = message.animation.file_id
-        await message.reply_animation(
-            animation=media, 
-            caption=caption, 
-            parse_mode=ParseMode.HTML, 
-            reply_markup=reply_markup,
-            has_spoiler=new_spoiler,
-            show_caption_above_media=message.show_caption_above_media
-        )
-
-    elif message.sticker:
-        media = message.sticker.file_id
-        await message.reply_sticker(
-            sticker=media, 
-            reply_markup=reply_markup
-        )
-
-    elif message.document:
-        media = message.document.file_id
-        filename = message.document.file_name
-        await message.reply_document(
-            document=media, 
-            filename=filename, 
-            caption=caption, 
-            parse_mode=ParseMode.HTML, 
-            reply_markup=reply_markup
-        )
-
-    elif message.audio:
-        media = message.audio.file_id
-        duration = message.audio.duration
-        performer = message.audio.performer
-        title = message.audio.title
-        await message.reply_audio(
-            audio=media, 
-            duration=duration, 
-            performer=performer, 
-            title=title, 
-            caption=caption, 
-            parse_mode=ParseMode.HTML, 
-            reply_markup=reply_markup
-        )
-    
-    elif message.video:
-        media = message.video.file_id
-        duration = message.video.duration
-        await message.reply_video(
-            video=media, 
-            duration=duration, 
-            caption=caption, 
-            parse_mode=ParseMode.HTML, 
-            reply_markup=reply_markup,
-            has_spoiler=new_spoiler,
-            show_caption_above_media=message.show_caption_above_media
-        )
-
-    elif message.contact:
-        phone_number = message.contact.phone_number
-        first_name = message.contact.first_name
-        last_name = message.contact.last_name
-        await message.reply_contact(
-            phone_number=phone_number, 
-            first_name=first_name, 
-            last_name=last_name, 
-            reply_markup=reply_markup
-        )
-
-    elif message.venue:
-        longitude = message.venue.location.longitude
-        latitude = message.venue.location.latitude
-        title = message.venue.title
-        address = message.venue.address
-        foursquare_id = message.venue.foursquare_id
-        await message.reply_venue(
-            longitude=longitude, 
-            latitude=latitude, 
-            title=title, 
-            address=address, 
-            foursquare_id=foursquare_id, 
-            reply_markup=reply_markup
-        )
-
-    elif message.location:
-        longitude = message.location.longitude
-        latitude = message.location.latitude
-        await message.reply_location(latitude=latitude, longitude=longitude, reply_markup=reply_markup)
-
-    elif message.video_note:
-        media = message.video_note.file_id
-        length = message.video_note.length
-        duration = message.video_note.duration
-        await message.reply_video_note(video_note=media, length=length, duration=duration, reply_markup=reply_markup)
-    
-    elif message.dice:
-        await context.bot.sendDice(chat_id=update.effective_user.id, reply_markup=reply_markup, emoji=message.dice.emoji)
-
-    elif message.game:
-        text = "Sorry, telegram doesn't allow to echo this message"
-        await message.reply_text(text=text, quote=True)
-
-    else:
-        text = "Sorry, this kind of media is not supported yet"
-        await message.reply_text(text=text, quote=True)
+def private_chat_kb():
+    bot_link = "https://t.me/{}".format(constants.GET_ME.username)
+    button0 = InlineKeyboardButton(text="Private chat", url=bot_link)
+    buttons_list = [[button0]]
+    keyboard = InlineKeyboardMarkup(buttons_list)
+    return keyboard
